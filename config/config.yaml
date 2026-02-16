@@ -1,0 +1,47 @@
+# Safaricom Churn Intelligence - Configuration File
+
+
+project:
+  name: "Safaricom Churn Intelligence"
+  version: "0.1.0"
+  
+data:
+  raw_data_path: "data/raw/telco_customer_churn.csv"
+  processed_data_path: "data/processed/safaricom_churn_enhanced.csv"
+  
+model:
+  model_path: "models/churn_model.pkl"
+  test_size: 0.2
+  random_state: 42
+  
+
+  random_forest:
+    n_estimators: 200
+    max_depth: 15
+    min_samples_split: 10
+    class_weight: "balanced"
+
+features:
+
+  kenyan_counties:
+    - "Nairobi"
+    - "Mombasa"
+    - "Kisumu"
+    - "Nakuru"
+    - "Uasin Gishu"
+    - "Thika"
+    - "Malindi"
+    - "Kakamega"
+    - "Nyeri"
+    - "Machakos"
+  
+  rural_counties:
+    - "Malindi"
+    - "Kakamega"
+    - "Machakos"
+
+business:
+  avg_customer_lifetime_value: 5000  # KES per year
+  retention_cost_high_risk: 500      # KES per customer
+  retention_cost_medium_risk: 200    # KES per customer
+  retention_success_rate: 0.40       # 40% success rate

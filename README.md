@@ -11,7 +11,7 @@ ML-powered customer churn prediction with Kenya-specific market features
 
 This project tackles customer churn prediction for Kenya's telco market by enhancing a standard churn dataset with **Kenya-specific features** including M-Pesa integration, Bonga loyalty points, Safaricom Home adoption, and county-level demographics.
 
-**Key Achievement:** ROC-AUC of **0.8420** (84.2% accuracy in identifying potential churners)
+**Key Achievement:** ROC-AUC of **0.8420** (strong model performance in distinguishing churners from non-churners)
 
 ---
 
@@ -74,7 +74,7 @@ safaricom-churn-intelligence/
 ### Installation
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_USERNAME/safaricom-churn-intelligence.git
+git clone https://github.com/bennedictbett/Safaricom-churn-intelligence.git
 cd safaricom-churn-intelligence
 
 # Create virtual environment

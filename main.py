@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Literal
+from fastapi.responses import HTMLResponse
 import pandas as pd
 import numpy as np
 import joblib
@@ -18,9 +19,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
 # Model loading
-# ---------------------------------------------------------------------------
 MODEL = None
 FEATURE_NAMES = None
 
@@ -45,9 +44,9 @@ async def lifespan(app: FastAPI):
     yield
 
 
-# ---------------------------------------------------------------------------
+
 # App setup  (only ONE app definition)
-# ---------------------------------------------------------------------------
+
 app = FastAPI(
     title="Safaricom Churn Intelligence API",
     lifespan=lifespan,
@@ -77,9 +76,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+def landing_page():
+    with open("landing_page.html", "r") as f:
+        return f.read()
+
+
 # Schemas  (only ONE CustomerFeatures definition)
-# ---------------------------------------------------------------------------
+
 
 class CustomerFeatures(BaseModel):
     # Standard telco features
@@ -156,10 +160,7 @@ class HealthResponse(BaseModel):
     model_loaded: bool
     version: str
 
-
-# ---------------------------------------------------------------------------
 # Constants
-# ---------------------------------------------------------------------------
 
 FEATURE_IMPORTANCE_LABELS = {
     "contract_Month-to-month": "Month-to-month contract (no commitment)",
@@ -199,9 +200,7 @@ RETENTION_ACTIONS = {
     ],
 }
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 def get_risk_level(prob: float):
     if prob >= 0.70:
@@ -263,9 +262,7 @@ def get_top_drivers(data: dict, n: int = 4) -> List[str]:
     return (drivers or ["Insufficient signal — monitor closely"])[:n]
 
 
-# ---------------------------------------------------------------------------
 # Endpoints
-# ---------------------------------------------------------------------------
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 def health_check():

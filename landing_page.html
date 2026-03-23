@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safaricom Churn Intelligence API</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #00c853;
+    --green-dim: #00a846;
+    --green-glow: rgba(0,200,83,0.15);
+    --bg: #080f0a;
+    --bg2: #0d180f;
+    --bg3: #111e13;
+    --border: rgba(0,200,83,0.15);
+    --text: #e8f5e9;
+    --text-dim: #7a9e7f;
+    --text-muted: #3d5c41;
+    --red: #ff4444;
+    --amber: #ffab00;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,200,83,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,83,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow orb */
+  body::after {
+    content: '';
+    position: fixed;
+    top: -200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0,200,83,0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* ── NAV ── */
+  nav {
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    position: relative; z-index: 1;
+  }
+  .nav-inner {
+    max-width: 900px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px;
+    letter-spacing: 0.05em; color: var(--text);
+    text-decoration: none;
+  }
+  .logo-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(.8)} }
+
+  .nav-links { display: flex; gap: 8px; }
+  .nav-link {
+    padding: 6px 14px; border-radius: 4px; font-size: 12px;
+    text-decoration: none; color: var(--text-dim);
+    border: 1px solid transparent;
+    transition: all .2s;
+  }
+  .nav-link:hover { color: var(--green); border-color: var(--border); }
+  .nav-link.cta {
+    background: var(--green); color: #000; font-weight: 500;
+    border-color: var(--green);
+  }
+  .nav-link.cta:hover { background: var(--green-dim); }
+
+  /* ── HERO ── */
+  .hero { padding: 80px 0 60px; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 20px; padding: 5px 14px; font-size: 11px;
+    color: var(--green); margin-bottom: 28px; letter-spacing: 0.08em;
+  }
+  .badge-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+
+  h1 {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: clamp(36px, 6vw, 60px); line-height: 1.05;
+    color: var(--text); margin-bottom: 20px;
+  }
+  h1 span { color: var(--green); }
+
+  .hero-sub {
+    font-size: 14px; color: var(--text-dim); line-height: 1.7;
+    max-width: 520px; margin-bottom: 36px;
+  }
+
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 52px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 22px; border-radius: 6px; font-size: 13px;
+    font-family: 'DM Mono', monospace; font-weight: 500;
+    text-decoration: none; transition: all .2s; cursor: pointer;
+    border: none;
+  }
+  .btn-primary { background: var(--green); color: #000; }
+  .btn-primary:hover { background: var(--green-dim); transform: translateY(-1px); }
+  .btn-ghost {
+    background: transparent; color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--green); color: var(--green); }
+
+  /* ── STATS ROW ── */
+  .stats {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; margin-bottom: 64px;
+  }
+  .stat {
+    background: var(--bg2); padding: 20px;
+    text-align: center;
+  }
+  .stat-val {
+    font-family: 'Syne', sans-serif; font-weight: 800;
+    font-size: 22px; color: var(--green); display: block;
+    margin-bottom: 4px;
+  }
+  .stat-label { font-size: 10px; color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* ── ENDPOINTS ── */
+  .section-label {
+    font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .endpoints { display: flex; flex-direction: column; gap: 8px; margin-bottom: 64px; }
+
+  .endpoint {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 14px 18px;
+    text-decoration: none; color: var(--text);
+    transition: all .2s; cursor: pointer;
+  }
+  .endpoint:hover { border-color: var(--green); background: var(--bg3); transform: translateX(4px); }
+
+  .method {
+    font-size: 10px; font-weight: 500; letter-spacing: 0.08em;
+    padding: 3px 8px; border-radius: 3px; min-width: 40px;
+    text-align: center; flex-shrink: 0;
+  }
+  .method.post { background: rgba(0,200,83,0.12); color: var(--green); border: 1px solid rgba(0,200,83,0.2); }
+  .method.get { background: rgba(0,168,255,0.1); color: #40c4ff; border: 1px solid rgba(0,168,255,0.2); }
+
+  .ep-path { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; }
+  .ep-desc { font-size: 12px; color: var(--text-dim); text-align: right; }
+  .ep-arrow { color: var(--text-muted); font-size: 14px; transition: transform .2s; }
+  .endpoint:hover .ep-arrow { transform: translateX(3px); color: var(--green); }
+
+  /* ── CODE BLOCK ── */
+  .code-section { margin-bottom: 64px; }
+
+  .code-tabs { display: flex; gap: 0; margin-bottom: 0; }
+  .code-tab {
+    padding: 8px 16px; font-size: 11px; font-family: 'DM Mono', monospace;
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text-muted); cursor: pointer;
+    border-bottom: none; border-radius: 6px 6px 0 0;
+    transition: all .2s; margin-right: 2px;
+  }
+  .code-tab.active { background: var(--bg2); color: var(--green); border-color: var(--green); }
+
+  .code-block {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 0 6px 6px 6px; padding: 24px;
+    font-size: 12px; line-height: 1.8; overflow-x: auto;
+    position: relative;
+  }
+  .code-block pre { color: var(--text-dim); }
+  .ck { color: #ff9d5c; }   /* keyword */
+  .cs { color: #a8ff78; }   /* string */
+  .cc { color: var(--text-muted); }  /* comment */
+  .cn { color: #40c4ff; }   /* number / var */
+
+  .copy-btn {
+    position: absolute; top: 12px; right: 12px;
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 10px; padding: 4px 10px;
+    border-radius: 4px; cursor: pointer; font-family: 'DM Mono', monospace;
+    transition: all .2s; letter-spacing: 0.05em;
+  }
+  .copy-btn:hover { border-color: var(--green); color: var(--green); }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 28px 0; margin-top: 20px;
+    position: relative; z-index: 1;
+  }
+  .footer-inner {
+    max-width: 900px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .footer-left { font-size: 12px; color: var(--text-muted); }
+  .footer-left a { color: var(--text-dim); text-decoration: none; }
+  .footer-left a:hover { color: var(--green); }
+  .footer-links { display: flex; gap: 16px; }
+  .footer-links a { font-size: 12px; color: var(--text-muted); text-decoration: none; transition: color .2s; }
+  .footer-links a:hover { color: var(--green); }
+
+  @media (max-width: 600px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .ep-desc { display: none; }
+    h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="logo" href="/">
+      <div class="logo-dot"></div>
+      CHURN INTELLIGENCE
+    </a>
+    <div class="nav-links">
+      <a class="nav-link" href="/docs">Swagger</a>
+      <a class="nav-link" href="/health">Health</a>
+      <a class="nav-link cta" href="/docs">Try API →</a>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <section class="hero">
+    <div class="badge">
+      <div class="badge-dot"></div>
+      LIVE · v1.0.0 · OAS 3.1
+    </div>
+
+    <h1>Predict churn.<br>Retain <span>customers.</span></h1>
+
+    <p class="hero-sub">
+      ML-powered churn prediction for Safaricom customers using
+      Kenya-specific behavioral features — M-Pesa usage, Bonga Points,
+      county demographics, and network quality signals.
+    </p>
+
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="/docs">Explore Docs →</a>
+      <a class="btn btn-ghost" href="https://github.com/bennedictbett/Safaricom-churn-intelligence" target="_blank">GitHub ↗</a>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-val">84.2%</span>
+        <span class="stat-label">ROC-AUC</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">7,043</span>
+        <span class="stat-label">Customers trained</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">4</span>
+        <span class="stat-label">Endpoints</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">3</span>
+        <span class="stat-label">Risk levels</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-label">Endpoints</div>
+    <div class="endpoints">
+      <a class="endpoint" href="/docs#/Prediction/predict_single_predict_post">
+        <span class="method post">POST</span>
+        <span class="ep-path">/predict</span>
+        <span class="ep-desc">Single customer churn prediction</span>
+        <span class="ep-arrow">→</span>
+      </a>
+      <a class="endpoint" href="/docs#/Prediction/predict_batch_predict_batch_post">
+        <span class="method post">POST</span>
+        <span class="ep-path">/predict/batch</span>
+        <span class="ep-desc">Batch predictions via CSV upload</span>
+        <span class="ep-arrow">→</span>
+      </a>
+      <a class="endpoint" href="/docs#/Model/feature_importance_feature_importance_get">
+        <span class="method get">GET</span>
+        <span class="ep-path">/feature-importance</span>
+        <span class="ep-desc">Top churn drivers from the model</span>
+        <span class="ep-arrow">→</span>
+      </a>
+      <a class="endpoint" href="/docs#/System/health_check_health_get">
+        <span class="method get">GET</span>
+        <span class="ep-path">/health</span>
+        <span class="ep-desc">Service health check</span>
+        <span class="ep-arrow">→</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="code-section">
+    <div class="section-label">Quick start</div>
+    <div class="code-tabs">
+      <div class="code-tab active">curl</div>
+    </div>
+    <div class="code-block">
+      <button class="copy-btn" onclick="
+        navigator.clipboard.writeText(document.getElementById('curl-code').innerText);
+        this.textContent='copied!';
+        setTimeout(()=>this.textContent='copy',1500)
+      ">copy</button>
+      <pre id="curl-code"><span class="ck">curl</span> -X POST <span class="cs">"https://safaricom-churn-intelligence.onrender.com/predict"</span> \
+  -H <span class="cs">"Content-Type: application/json"</span> \
+  -d <span class="cs">'{
+    "tenure": 8,
+    "monthly_charges": 3200,
+    "total_charges": 25600,
+    "contract": "Month-to-month",
+    "payment_method": "Electronic check",
+    "mpesa_usage_score": 3.5,
+    "bonga_points_active": false,
+    "network_quality_score": 4.0,
+    "competitor_exposure": 7.0,
+    "county": "Nakuru",
+    "rural": true
+  }'</span>
+
+<span class="cc"># Response</span>
+{
+  <span class="cs">"churn_probability"</span>: <span class="cn">0.7823</span>,
+  <span class="cs">"risk_level"</span>: <span class="cs">"High"</span>,
+  <span class="cs">"risk_score"</span>: <span class="cn">3</span>,
+  <span class="cs">"top_churn_drivers"</span>: [
+    <span class="cs">"Month-to-month contract"</span>,
+    <span class="cs">"Short tenure (8 months)"</span>,
+    <span class="cs">"Low M-Pesa usage (3.5/10)"</span>
+  ],
+  <span class="cs">"recommended_actions"</span>: [
+    <span class="cs">"🚨 Personal outreach within 24 hours"</span>,
+    <span class="cs">"Offer 2x Bonga points for 3 months"</span>
+  ]
+}</pre>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-left">
+      Built by <a href="https://github.com/bennedictbett">Benedict Bett</a> ·
+      <a href="mailto:benedictbett08@gmail.com">benedictbett08@gmail.com</a>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/bennedictbett/Safaricom-churn-intelligence" target="_blank">GitHub</a>
+      <a href="/docs">API Docs</a>
+      <a href="/openapi.json">OpenAPI</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -78,7 +78,8 @@ app.add_middleware(
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 def landing_page():
-    with open("landing_page.html", "r") as f:
+    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "landing_page.html")
+    with open(html_path, encoding="utf-8") as f:
         return f.read()
 
 

@@ -41,6 +41,8 @@ list_of_files = [
     "README.md",                             
     # API deployment
     "main.py",
+    "landing_page.html",
+    "app.html",
     "render.yaml",
     "Dockerfile",
     "DEPLOYMENT.md",

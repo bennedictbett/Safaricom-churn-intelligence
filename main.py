@@ -82,7 +82,11 @@ def landing_page():
     with open(html_path, encoding="utf-8") as f:
         return f.read()
 
-
+@app.get("/app", response_class=HTMLResponse, include_in_schema=False)
+def prediction_app():
+    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.html")
+    with open(html_path, encoding="utf-8") as f:
+        return f.read()
 # Schemas  (only ONE CustomerFeatures definition)
 
 

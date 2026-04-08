@@ -216,25 +216,63 @@ def get_risk_level(prob: float):
 
 
 def preprocess(data: dict) -> pd.DataFrame:
-    df = pd.DataFrame([data])
+    """Map API input fields to the 40 features the model expects."""
+    
+    # ── Direct mappings (rename API fields to model fields) ──
+    row = {
+        'gender':             'Male',   # not collected in API, default
+        'SeniorCitizen':      int(data.get('senior_citizen', False)),
+        'Partner':            int(data.get('partner', False)),
+        'Dependents':         int(data.get('dependents', False)),
+        'tenure':             data.get('tenure', 0),
+        'PhoneService':       int(data.get('phone_service', True)),
+        'MultipleLines':      data.get('multiple_lines', 'No'),
+        'InternetService':    data.get('internet_service', 'Fiber optic'),
+        'OnlineSecurity':     data.get('online_security', 'No'),
+        'OnlineBackup':       data.get('online_backup', 'No'),
+        'DeviceProtection':   data.get('device_protection', 'No'),
+        'TechSupport':        data.get('tech_support', 'No'),
+        'StreamingTV':        data.get('streaming_tv', 'No'),
+        'StreamingMovies':    data.get('streaming_movies', 'No'),
+        'Contract':           data.get('contract', 'Month-to-month'),
+        'PaperlessBilling':   int(data.get('paperless_billing', True)),
+        'PaymentMethod':      data.get('payment_method', 'Electronic check'),
+        'MonthlyCharges':     data.get('monthly_charges', 0),
+        'TotalCharges':       data.get('total_charges', 0),
+        'county':             data.get('county', 'Nairobi'),
 
-    bool_cols = [
-        "paperless_billing", "phone_service", "senior_citizen",
-        "partner", "dependents", "bonga_points_active", "safaricom_home", "rural",
-    ]
-    cat_cols = [
-        "contract", "payment_method", "multiple_lines",
-        "internet_service", "online_security", "online_backup",
-        "device_protection", "tech_support", "streaming_tv",
-        "streaming_movies", "county",
-    ]
+        # ── Kenya-specific: direct ──
+        'is_rural':           int(data.get('rural', False)),
+        'mpesa_usage_score':  data.get('mpesa_usage_score', 5.0),
+        'bonga_active':       int(data.get('bonga_points_active', False)),
+        'has_safaricom_home': int(data.get('safaricom_home', False)),
+        'competitor_exposure':data.get('competitor_exposure', 3.0),
+        'network_quality_score': data.get('network_quality_score', 7.0),
 
-    for col in bool_cols:
-        if col in df.columns:
-            df[col] = df[col].astype(int)
+        # ── Kenya-specific: engineered (derived from inputs) ──
+        'location_type':      'Rural' if data.get('rural', False) else 'Urban',
+        'mpesa_engagement':   'High' if data.get('mpesa_usage_score', 5) >= 7 else ('Medium' if data.get('mpesa_usage_score', 5) >= 4 else 'Low'),
+        'mpesa_monthly_transactions': round(data.get('mpesa_usage_score', 5) * 8),
+        'bonga_points':       500 if data.get('bonga_points_active', False) else 50,
+        'days_since_bonga_redemption': 30 if data.get('bonga_points_active', False) else 180,
+        'high_competitor_risk': int(data.get('competitor_exposure', 3) >= 7),
+        'network_satisfaction': 'Satisfied' if data.get('network_quality_score', 7) >= 7 else ('Neutral' if data.get('network_quality_score', 7) >= 4 else 'Dissatisfied'),
+        'uses_data_rollover': int(data.get('internet_service', 'Fiber optic') != 'No'),
+        'data_bundle_tier':   'Premium' if data.get('monthly_charges', 0) > 5000 else ('Standard' if data.get('monthly_charges', 0) > 2000 else 'Basic'),
+        'avg_monthly_data_gb': data.get('mpesa_usage_score', 5) * 2.5,
+        'digital_loyalty_score': (data.get('mpesa_usage_score', 5) + data.get('network_quality_score', 7)) / 2,
+        'rural_network_risk': int(data.get('rural', False) and data.get('network_quality_score', 7) < 5),
+        'price_sensitive_risk': int(data.get('monthly_charges', 0) > 4000 and data.get('contract', '') == 'Month-to-month'),
+        'customer_engagement_score': round(
+            (data.get('mpesa_usage_score', 5) * 0.4) +
+            (data.get('network_quality_score', 7) * 0.3) +
+            ((1 - data.get('competitor_exposure', 3) / 10) * 3 * 0.3), 2
+        ),
+    }
 
-    df = pd.get_dummies(df, columns=[c for c in cat_cols if c in df.columns])
+    df = pd.DataFrame([row])
 
+    # Align to exact feature order the model expects
     if FEATURE_NAMES is not None:
         for col in FEATURE_NAMES:
             if col not in df.columns:

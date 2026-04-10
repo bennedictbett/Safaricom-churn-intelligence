@@ -238,10 +238,10 @@ def preprocess(data: dict) -> pd.DataFrame:
     yesno_map    = {'No': 0, 'No internet service': 1, 'Yes': 2}
 
     # Engineered features
-    mpesa_eng    = 0 if mpesa < 4 else (1 if mpesa < 7 else 2)   # low=0 medium=1 high=2
+    mpesa_eng    = 1 if mpesa < 4 else (2 if mpesa < 7 else 0)   # low=0 medium=1 high=2
     net_sat      = 0 if network < 4 else (1 if network < 7 else 2) # dissatisfied=0 neutral=1 satisfied=2
-    bundle_tier  = 0 if monthly <= 2000 else (1 if monthly <= 4000 else (2 if monthly <= 6000 else 3))
-    location     = 1 if is_rural else 0  # rural=1 urban=0
+    bundle_tier  = 0 if monthly <= 2000 else (2 if monthly <= 4000 else (1 if monthly <= 6000 else 3))
+    location     = 0 if is_rural else 1 # rural=1 urban=0
     dig_loyalty  = (mpesa * 5) + (network * 3) + ((10 - competitor) * 2)
     engagement   = round((mpesa * 0.4) + (network * 0.3) + ((1 - competitor/10) * 3 * 0.3), 2)
 
@@ -282,6 +282,7 @@ def preprocess(data: dict) -> pd.DataFrame:
         'uses_data_rollover':           int(data.get('internet_service', 'Fiber optic') != 'No'),
         'data_bundle_tier':             bundle_tier,
         'avg_monthly_data_gb':          mpesa * 2.5,
+        'PaperlessBilling':             1 if data.get('paperless_billing', True) else 0,
         'digital_loyalty_score':        dig_loyalty,
         'rural_network_risk':           int(is_rural and network < 5),
         'price_sensitive_risk':         int(monthly > 4000 and data.get('contract') == 'Month-to-month'),

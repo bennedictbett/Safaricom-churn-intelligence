@@ -217,63 +217,79 @@ def get_risk_level(prob: float):
 
 def preprocess(data: dict) -> pd.DataFrame:
     """Map API input fields to the 40 features the model expects."""
-    
-    # ── Direct mappings (rename API fields to model fields) ──
-    # ── Direct mappings ──
+
+    tenure      = data.get('tenure', 0)
+    monthly     = data.get('monthly_charges', 0)
+    mpesa       = data.get('mpesa_usage_score', 5.0)
+    network     = data.get('network_quality_score', 7.0)
+    competitor  = data.get('competitor_exposure', 3.0)
+    is_rural    = int(data.get('rural', False))
+    bonga_on    = int(data.get('bonga_points_active', False))
+
+    # Categorical encodings — matched exactly to label encoder order from training
+    contract_map = {'Month-to-month': 0, 'One year': 1, 'Two year': 2}
+    internet_map = {'DSL': 0, 'Fiber optic': 1, 'No': 2}
+    payment_map  = {'Bank transfer (automatic)': 0, 'Credit card (automatic)': 1,
+                    'Electronic check': 2, 'Mailed check': 3}
+    lines_map    = {'No': 0, 'No phone service': 1, 'Yes': 2}
+    county_map   = {'Kakamega': 0, 'Kisumu': 1, 'Machakos': 2, 'Malindi': 3,
+                    'Mombasa': 4, 'Nairobi': 5, 'Nakuru': 6, 'Nyeri': 7,
+                    'Thika': 8, 'Uasin Gishu': 9}
+    yesno_map    = {'No': 0, 'No internet service': 1, 'Yes': 2}
+
+    # Engineered features
+    mpesa_eng    = 0 if mpesa < 4 else (1 if mpesa < 7 else 2)   # low=0 medium=1 high=2
+    net_sat      = 0 if network < 4 else (1 if network < 7 else 2) # dissatisfied=0 neutral=1 satisfied=2
+    bundle_tier  = 0 if monthly <= 2000 else (1 if monthly <= 4000 else (2 if monthly <= 6000 else 3))
+    location     = 1 if is_rural else 0  # rural=1 urban=0
+    dig_loyalty  = (mpesa * 5) + (network * 3) + ((10 - competitor) * 2)
+    engagement   = round((mpesa * 0.4) + (network * 0.3) + ((1 - competitor/10) * 3 * 0.3), 2)
+
     row = {
-        'gender':             1,   # 1=Male, 0=Female — not collected, default Male
-        'SeniorCitizen':      int(data.get('senior_citizen', False)),
-        'Partner':            int(data.get('partner', False)),
-        'Dependents':         int(data.get('dependents', False)),
-        'tenure':             data.get('tenure', 0),
-        'PhoneService':       int(data.get('phone_service', True)),
-        'MultipleLines':      1 if data.get('multiple_lines') == 'Yes' else 0,
-        'InternetService':    {'Fiber optic': 2, 'DSL': 1, 'No': 0}.get(data.get('internet_service', 'Fiber optic'), 2),
-        'OnlineSecurity':     1 if data.get('online_security') == 'Yes' else 0,
-        'OnlineBackup':       1 if data.get('online_backup') == 'Yes' else 0,
-        'DeviceProtection':   1 if data.get('device_protection') == 'Yes' else 0,
-        'TechSupport':        1 if data.get('tech_support') == 'Yes' else 0,
-        'StreamingTV':        1 if data.get('streaming_tv') == 'Yes' else 0,
-        'StreamingMovies':    1 if data.get('streaming_movies') == 'Yes' else 0,
-        'Contract':           {'Month-to-month': 0, 'One year': 1, 'Two year': 2}.get(data.get('contract', 'Month-to-month'), 0),
-        'PaperlessBilling':   int(data.get('paperless_billing', True)),
-        'PaymentMethod':      {'Electronic check': 0, 'Mailed check': 1, 'Bank transfer (automatic)': 2, 'Credit card (automatic)': 3}.get(data.get('payment_method', 'Electronic check'), 0),
-        'MonthlyCharges':     data.get('monthly_charges', 0),
-        'TotalCharges':       data.get('total_charges', 0),
-        'county':             {'Nairobi': 0, 'Mombasa': 1, 'Kisumu': 2, 'Nakuru': 3, 'Uasin Gishu': 4, 'Thika': 5, 'Malindi': 6, 'Kakamega': 7, 'Nyeri': 8, 'Machakos': 9}.get(data.get('county', 'Nairobi'), 0),
-
-    # ── Kenya-specific: direct ──
-        'is_rural':           int(data.get('rural', False)),
-        'mpesa_usage_score':  data.get('mpesa_usage_score', 5.0),
-        'bonga_active':       int(data.get('bonga_points_active', False)),
-        'has_safaricom_home': int(data.get('safaricom_home', False)),
-        'competitor_exposure':data.get('competitor_exposure', 3.0),
-        'network_quality_score': data.get('network_quality_score', 7.0),
-
-    # ── Kenya-specific: engineered ──
-        'location_type':      1 if data.get('rural', False) else 0,
-        'mpesa_engagement':   2 if data.get('mpesa_usage_score', 5) >= 7 else (1 if data.get('mpesa_usage_score', 5) >= 4 else 0),
-        'mpesa_monthly_transactions': round(data.get('mpesa_usage_score', 5) * 8),
-        'bonga_points':       500 if data.get('bonga_points_active', False) else 50,
-        'days_since_bonga_redemption': 30 if data.get('bonga_points_active', False) else 180,
-        'high_competitor_risk': int(data.get('competitor_exposure', 3) >= 7),
-        'network_satisfaction': 2 if data.get('network_quality_score', 7) >= 7 else (1 if data.get('network_quality_score', 7) >= 4 else 0),
-        'uses_data_rollover': int(data.get('internet_service', 'Fiber optic') != 'No'),
-        'data_bundle_tier':   2 if data.get('monthly_charges', 0) > 5000 else (1 if data.get('monthly_charges', 0) > 2000 else 0),
-        'avg_monthly_data_gb': data.get('mpesa_usage_score', 5) * 2.5,
-        'digital_loyalty_score': (data.get('mpesa_usage_score', 5) + data.get('network_quality_score', 7)) / 2,
-        'rural_network_risk': int(data.get('rural', False) and data.get('network_quality_score', 7) < 5),
-        'price_sensitive_risk': int(data.get('monthly_charges', 0) > 4000 and data.get('contract', '') == 'Month-to-month'),
-        'customer_engagement_score': round(
-            (data.get('mpesa_usage_score', 5) * 0.4) +
-            (data.get('network_quality_score', 7) * 0.3) +
-            ((1 - data.get('competitor_exposure', 3) / 10) * 3 * 0.3), 2
-        ),
+        'gender':                       0,
+        'SeniorCitizen':                int(data.get('senior_citizen', False)),
+        'Partner':                      int(data.get('partner', False)),
+        'Dependents':                   int(data.get('dependents', False)),
+        'tenure':                       tenure,
+        'PhoneService':                 int(data.get('phone_service', True)),
+        'MultipleLines':                lines_map.get(data.get('multiple_lines', 'No'), 0),
+        'InternetService':              internet_map.get(data.get('internet_service', 'Fiber optic'), 1),
+        'OnlineSecurity':               yesno_map.get(data.get('online_security', 'No'), 0),
+        'OnlineBackup':                 yesno_map.get(data.get('online_backup', 'No'), 0),
+        'DeviceProtection':             yesno_map.get(data.get('device_protection', 'No'), 0),
+        'TechSupport':                  yesno_map.get(data.get('tech_support', 'No'), 0),
+        'StreamingTV':                  yesno_map.get(data.get('streaming_tv', 'No'), 0),
+        'StreamingMovies':              yesno_map.get(data.get('streaming_movies', 'No'), 0),
+        'Contract':                     contract_map.get(data.get('contract', 'Month-to-month'), 0),
+        'PaperlessBilling':             int(data.get('paperless_billing', True)),
+        'PaymentMethod':                payment_map.get(data.get('payment_method', 'Electronic check'), 2),
+        'MonthlyCharges':               monthly,
+        'TotalCharges':                 data.get('total_charges', 0),
+        'county':                       county_map.get(data.get('county', 'Nairobi'), 5),
+        'is_rural':                     is_rural,
+        'location_type':                location,
+        'mpesa_usage_score':            mpesa,
+        'mpesa_engagement':             mpesa_eng,
+        'mpesa_monthly_transactions':   round(mpesa * 8),
+        'bonga_points':                 500.0 if bonga_on else 50.0,
+        'days_since_bonga_redemption':  30 if bonga_on else 180,
+        'bonga_active':                 bonga_on,
+        'has_safaricom_home':           int(data.get('safaricom_home', False)),
+        'competitor_exposure':          int(competitor),
+        'high_competitor_risk':         int(competitor >= 7),
+        'network_quality_score':        int(network),
+        'network_satisfaction':         net_sat,
+        'uses_data_rollover':           int(data.get('internet_service', 'Fiber optic') != 'No'),
+        'data_bundle_tier':             bundle_tier,
+        'avg_monthly_data_gb':          mpesa * 2.5,
+        'digital_loyalty_score':        dig_loyalty,
+        'rural_network_risk':           int(is_rural and network < 5),
+        'price_sensitive_risk':         int(monthly > 4000 and data.get('contract') == 'Month-to-month'),
+        'customer_engagement_score':    engagement,
     }
 
     df = pd.DataFrame([row])
 
-    # Align to exact feature order the model expects
     if FEATURE_NAMES is not None:
         for col in FEATURE_NAMES:
             if col not in df.columns:

@@ -208,11 +208,11 @@ RETENTION_ACTIONS = {
 # Helpers
 
 def get_risk_level(prob: float):
-    if prob >= 0.70:
+    if prob >= 0.35:      # High — immediate intervention needed
         return "High", 3
-    elif prob >= 0.40:
+    elif prob >= 0.20:    # Medium — proactive engagement
         return "Medium", 2
-    return "Low", 1
+    return "Low", 1       # Low — maintain satisfaction
 
 
 def preprocess(data: dict) -> pd.DataFrame:

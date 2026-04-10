@@ -237,13 +237,28 @@ def preprocess(data: dict) -> pd.DataFrame:
                     'Thika': 8, 'Uasin Gishu': 9}
     yesno_map    = {'No': 0, 'No internet service': 1, 'Yes': 2}
 
-    # Engineered features
-    mpesa_eng    = 1 if mpesa < 4 else (2 if mpesa < 7 else 0)   # low=0 medium=1 high=2
-    net_sat      = 0 if network < 4 else (1 if network < 7 else 2) # dissatisfied=0 neutral=1 satisfied=2
+
+    # ── Engineered features with correct ranges ──
+    mpesa_eng    = 1 if mpesa < 4 else (2 if mpesa < 7 else 0)   # high=0, low=1, medium=2
+    net_sat      = 0 if network < 4 else (1 if network < 7 else 2)
     bundle_tier  = 0 if monthly <= 2000 else (2 if monthly <= 4000 else (1 if monthly <= 6000 else 3))
-    location     = 0 if is_rural else 1 # rural=1 urban=0
-    dig_loyalty  = (mpesa * 5) + (network * 3) + ((10 - competitor) * 2)
-    engagement   = round((mpesa * 0.4) + (network * 0.3) + ((1 - competitor/10) * 3 * 0.3), 2)
+    location     = 0 if is_rural else 1  # rural=0, urban=1
+
+    bonga_pts    = mpesa * 432.4  
+
+    days_bonga   = int(364 - (mpesa * 36.4)) 
+    if bonga_on:
+        days_bonga = min(days_bonga, 90)
+
+    avg_data     = mpesa * 4.5 if data.get('internet_service') == 'Fiber optic' else (mpesa * 2.0 if data.get('internet_service') == 'DSL' else mpesa * 0.5)
+
+    dig_loyalty  = (mpesa * 3.5) + (network * 2.5) + ((10 - competitor) * 1.5) + (bonga_on * 10) + (int(data.get('safaricom_home', False)) * 8)
+
+    engagement   = (mpesa * 2.5) + (network * 2.0) + ((10 - competitor) * 1.5) + (bonga_on * 8) + (tenure * 0.3)
+    engagement   = min(round(engagement, 2), 90)
+
+
+    mpesa_trans  = int(mpesa * 12) 
 
     row = {
         'gender':                       0,
@@ -270,9 +285,9 @@ def preprocess(data: dict) -> pd.DataFrame:
         'location_type':                location,
         'mpesa_usage_score':            mpesa,
         'mpesa_engagement':             mpesa_eng,
-        'mpesa_monthly_transactions':   round(mpesa * 8),
-        'bonga_points':                 500.0 if bonga_on else 50.0,
-        'days_since_bonga_redemption':  30 if bonga_on else 180,
+        'mpesa_monthly_transactions':   mpesa_trans,
+        'bonga_points':                 bonga_pts,
+        'days_since_bonga_redemption':  days_bonga,
         'bonga_active':                 bonga_on,
         'has_safaricom_home':           int(data.get('safaricom_home', False)),
         'competitor_exposure':          int(competitor),
@@ -281,7 +296,7 @@ def preprocess(data: dict) -> pd.DataFrame:
         'network_satisfaction':         net_sat,
         'uses_data_rollover':           int(data.get('internet_service', 'Fiber optic') != 'No'),
         'data_bundle_tier':             bundle_tier,
-        'avg_monthly_data_gb':          mpesa * 2.5,
+        'avg_monthly_data_gb':          avg_data,
         'PaperlessBilling':             1 if data.get('paperless_billing', True) else 0,
         'digital_loyalty_score':        dig_loyalty,
         'rural_network_risk':           int(is_rural and network < 5),

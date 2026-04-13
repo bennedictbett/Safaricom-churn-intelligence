@@ -216,17 +216,25 @@ def get_risk_level(prob: float):
 
 
 def preprocess(data: dict) -> pd.DataFrame:
-    """Map API input fields to the 40 features the model expects."""
 
     tenure      = data.get('tenure', 0)
     monthly     = data.get('monthly_charges', 0)
-    mpesa       = data.get('mpesa_usage_score', 5.0)
-    network     = data.get('network_quality_score', 7.0)
-    competitor  = data.get('competitor_exposure', 3.0)
+    # Scale API inputs (0-10) to training ranges
+    mpesa       = data.get('mpesa_usage_score', 5.0) * 10  # 0-10 → 0-100
+    network     = data.get('network_quality_score', 7.0)    # keep 0-10, clamp to 5-10
+    competitor  = data.get('competitor_exposure', 3.0) / 2  # 0-10 → 1-5
     is_rural    = int(data.get('rural', False))
     bonga_on    = int(data.get('bonga_points_active', False))
+    has_home    = int(data.get('safaricom_home', False))
+    internet    = data.get('internet_service', 'Fiber optic')
 
-    # Categorical encodings — matched exactly to label encoder order from training
+    # Clamp network to training range 5-10 (rural 3-8)
+    if is_rural:
+        network = max(3, min(8, network))
+    else:
+        network = max(5, min(10, network))
+
+    # Exact encoding from LabelEncoder
     contract_map = {'Month-to-month': 0, 'One year': 1, 'Two year': 2}
     internet_map = {'DSL': 0, 'Fiber optic': 1, 'No': 2}
     payment_map  = {'Bank transfer (automatic)': 0, 'Credit card (automatic)': 1,
@@ -237,28 +245,66 @@ def preprocess(data: dict) -> pd.DataFrame:
                     'Thika': 8, 'Uasin Gishu': 9}
     yesno_map    = {'No': 0, 'No internet service': 1, 'Yes': 2}
 
+    # Engineered features — exact logic from feature_engineering.py
+    # mpesa_engagement: bins [0,30,60,100] → low/medium/high → encoded high=0,low=1,medium=2
+    mpesa_eng    = 1 if mpesa < 30 else (2 if mpesa < 60 else 0)  # high=0,low=1,medium=2
 
-    # ── Engineered features with correct ranges ──
-    mpesa_eng    = 1 if mpesa < 4 else (2 if mpesa < 7 else 0)   # high=0, low=1, medium=2
-    net_sat      = 0 if network < 4 else (1 if network < 7 else 2)
-    bundle_tier  = 0 if monthly <= 2000 else (2 if monthly <= 4000 else (1 if monthly <= 6000 else 3))
-    location     = 0 if is_rural else 1  # rural=0, urban=1
+    # network_satisfaction: bins [0,5,7,10] → dissatisfied/neutral/satisfied → 0/1/2
+    net_sat      = 0 if network <= 5 else (1 if network <= 7 else 2)
 
-    bonga_pts    = mpesa * 432.4  
+    # data_bundle_tier: bins [0,30,60,100,200] on MonthlyCharges → basic/standard/premium/unlimited
+    # encoded: basic=0, premium=1, standard=2, unlimited=3
+    if monthly <= 30:
+        bundle_tier = 0   # basic
+    elif monthly <= 60:
+        bundle_tier = 2   # standard
+    elif monthly <= 100:
+        bundle_tier = 1   # premium
+    else:
+        bundle_tier = 3   # unlimited
 
-    days_bonga   = int(364 - (mpesa * 36.4)) 
+    # location_type: rural=0, urban=1
+    location     = 0 if is_rural else 1
+
+    # bonga_points: tenure*50 + MonthlyCharges*2 + noise (use 0 noise for API)
+    bonga_pts    = (tenure * 50) + (monthly * 2)
+    bonga_pts    = max(0, min(15000, bonga_pts))
+
+    # days_since_bonga_redemption
     if bonga_on:
-        days_bonga = min(days_bonga, 90)
+        days_bonga = 45   # recently active
+    elif bonga_pts < 500:
+        days_bonga = 270  # low points = long since redemption
+    else:
+        days_bonga = 150
 
-    avg_data     = mpesa * 4.5 if data.get('internet_service') == 'Fiber optic' else (mpesa * 2.0 if data.get('internet_service') == 'DSL' else mpesa * 0.5)
+    # bonga_active: days < 90
+    bonga_active_val = 1 if days_bonga < 90 else 0
 
-    dig_loyalty  = (mpesa * 3.5) + (network * 2.5) + ((10 - competitor) * 1.5) + (bonga_on * 10) + (int(data.get('safaricom_home', False)) * 8)
+    # uses_data_rollover
+    uses_rollover = 1 if internet != 'No' else 0
 
-    engagement   = (mpesa * 2.5) + (network * 2.0) + ((10 - competitor) * 1.5) + (bonga_on * 8) + (tenure * 0.3)
-    engagement   = min(round(engagement, 2), 90)
+    # avg_monthly_data_gb: lognormal in training, use reasonable estimate
+    avg_data     = 5.0 if internet == 'No' else (20.0 if internet == 'Fiber optic' else 10.0)
 
+    # digital_loyalty_score = mpesa*0.6 + (bonga_points/150)*0.4
+    dig_loyalty  = (mpesa * 0.6) + (bonga_pts / 150) * 0.4
 
-    mpesa_trans  = int(mpesa * 12) 
+    # rural_network_risk = is_rural AND network < 6
+    rural_net_risk = int(is_rural and network < 6)
+
+    # price_sensitive_risk = MonthlyCharges > median AND competitor_exposure >= 4
+    # median MonthlyCharges in training ≈ 64.76 (standard telco dataset)
+    price_risk   = int(monthly > 64.76 and competitor >= 4)
+
+    # high_competitor_risk = competitor_exposure >= 4
+    high_comp    = int(competitor >= 4)
+
+    # mpesa_monthly_transactions = poisson(mpesa/10)
+    mpesa_trans  = int(mpesa / 10)
+
+    # customer_engagement_score = has_home*25 + bonga_active*20 + mpesa*0.3 + uses_rollover*15
+    engagement   = (has_home * 25) + (bonga_active_val * 20) + (mpesa * 0.3) + (uses_rollover * 15)
 
     row = {
         'gender':                       0,
@@ -268,7 +314,7 @@ def preprocess(data: dict) -> pd.DataFrame:
         'tenure':                       tenure,
         'PhoneService':                 int(data.get('phone_service', True)),
         'MultipleLines':                lines_map.get(data.get('multiple_lines', 'No'), 0),
-        'InternetService':              internet_map.get(data.get('internet_service', 'Fiber optic'), 1),
+        'InternetService':              internet_map.get(internet, 1),
         'OnlineSecurity':               yesno_map.get(data.get('online_security', 'No'), 0),
         'OnlineBackup':                 yesno_map.get(data.get('online_backup', 'No'), 0),
         'DeviceProtection':             yesno_map.get(data.get('device_protection', 'No'), 0),
@@ -276,7 +322,7 @@ def preprocess(data: dict) -> pd.DataFrame:
         'StreamingTV':                  yesno_map.get(data.get('streaming_tv', 'No'), 0),
         'StreamingMovies':              yesno_map.get(data.get('streaming_movies', 'No'), 0),
         'Contract':                     contract_map.get(data.get('contract', 'Month-to-month'), 0),
-        'PaperlessBilling':             int(data.get('paperless_billing', True)),
+        'PaperlessBilling':             1 if data.get('paperless_billing', True) else 0,
         'PaymentMethod':                payment_map.get(data.get('payment_method', 'Electronic check'), 2),
         'MonthlyCharges':               monthly,
         'TotalCharges':                 data.get('total_charges', 0),
@@ -288,19 +334,18 @@ def preprocess(data: dict) -> pd.DataFrame:
         'mpesa_monthly_transactions':   mpesa_trans,
         'bonga_points':                 bonga_pts,
         'days_since_bonga_redemption':  days_bonga,
-        'bonga_active':                 bonga_on,
-        'has_safaricom_home':           int(data.get('safaricom_home', False)),
+        'bonga_active':                 bonga_active_val,
+        'has_safaricom_home':           has_home,
         'competitor_exposure':          int(competitor),
-        'high_competitor_risk':         int(competitor >= 7),
+        'high_competitor_risk':         high_comp,
         'network_quality_score':        int(network),
         'network_satisfaction':         net_sat,
-        'uses_data_rollover':           int(data.get('internet_service', 'Fiber optic') != 'No'),
+        'uses_data_rollover':           uses_rollover,
         'data_bundle_tier':             bundle_tier,
         'avg_monthly_data_gb':          avg_data,
-        'PaperlessBilling':             1 if data.get('paperless_billing', True) else 0,
         'digital_loyalty_score':        dig_loyalty,
-        'rural_network_risk':           int(is_rural and network < 5),
-        'price_sensitive_risk':         int(monthly > 4000 and data.get('contract') == 'Month-to-month'),
+        'rural_network_risk':           rural_net_risk,
+        'price_sensitive_risk':         price_risk,
         'customer_engagement_score':    engagement,
     }
 

@@ -5,6 +5,7 @@ FastAPI-powered real-time churn prediction service
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
+from sklearn.calibration import CalibratedClassifierCV
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Literal
@@ -36,11 +37,11 @@ async def lifespan(app: FastAPI):
             FEATURE_NAMES = artifact.get("feature_names")
         else:
             MODEL = artifact
-        logger.info("✅ Model loaded from %s", model_path)
+        logger.info(" Model loaded from %s", model_path)
     except FileNotFoundError:
-        logger.warning("⚠️  Model not found at %s — /predict will return 503", model_path)
+        logger.warning("  Model not found at %s — /predict will return 503", model_path)
     except Exception as e:
-        logger.warning("⚠️  Could not load model: %s — /predict will return 503", e)
+        logger.warning("  Could not load model: %s — /predict will return 503", e)
     yield
 
 
@@ -184,21 +185,21 @@ FEATURE_IMPORTANCE_LABELS = {
 
 RETENTION_ACTIONS = {
     "high": [
-        "🚨 Personal outreach within 24 hours",
+        "Personal outreach within 24 hours",
         "Offer 2x Bonga points for 3 months",
         "Propose annual contract with 2 months free",
         "Escalate to retention specialist team",
         "Provide dedicated network quality report for their area",
     ],
     "medium": [
-        "📞 Proactive call within 1 week",
+        "Proactive call within 1 week",
         "Offer M-Pesa bundle discount (20% off for 6 months)",
         "Activate Bonga loyalty programme",
         "Send personalised network upgrade notification",
         "Offer device upgrade tied to contract renewal",
     ],
     "low": [
-        "✅ Maintain regular engagement",
+        " Maintain regular engagement",
         "Include in quarterly satisfaction survey",
         "Send Bonga points rewards reminder",
         "Offer referral bonus programme",
@@ -206,29 +207,34 @@ RETENTION_ACTIONS = {
 }
 
 # Helpers
-
 def get_risk_level(prob: float):
-    if prob >= 0.31:      # Top 25% → High
+    if prob >= 0.65:
         return "High", 3
-    elif prob >= 0.26:    # Middle 50% → Medium  
+    elif prob >= 0.35:
         return "Medium", 2
-    return "Low", 1       # Bottom 25% → Low
+    return "Low", 1
+
+def rescale_probability(prob: float) -> float:
+    """Rescale compressed model output (0.16-0.40) to full 0-1 range."""
+    min_prob = 0.16
+    max_prob = 0.40
+    rescaled = (prob - min_prob) / (max_prob - min_prob)
+    return round(max(0.0, min(1.0, rescaled)), 4)
 
 
 def preprocess(data: dict) -> pd.DataFrame:
 
     tenure      = data.get('tenure', 0)
     monthly     = data.get('monthly_charges', 0)
-    # Scale API inputs (0-10) to training ranges
-    mpesa       = data.get('mpesa_usage_score', 5.0) * 10  # 0-10 → 0-100
-    network     = data.get('network_quality_score', 7.0)    # keep 0-10, clamp to 5-10
-    competitor  = data.get('competitor_exposure', 3.0) / 2  # 0-10 → 1-5
+    mpesa       = data.get('mpesa_usage_score', 5.0) * 10  
+    network     = data.get('network_quality_score', 7.0)    
+    competitor  = data.get('competitor_exposure', 3.0) / 2  
     is_rural    = int(data.get('rural', False))
     bonga_on    = int(data.get('bonga_points_active', False))
     has_home    = int(data.get('safaricom_home', False))
     internet    = data.get('internet_service', 'Fiber optic')
 
-    # Clamp network to training range 5-10 (rural 3-8)
+    
     if is_rural:
         network = max(3, min(8, network))
     else:
@@ -450,6 +456,7 @@ def predict_single(
     try:
         df = preprocess(data)
         prob = float(MODEL.predict_proba(df)[0][1])
+        prob = rescale_probability(prob)
     except Exception as e:
         logger.error("Prediction failed: %s", e)
         raise HTTPException(500, f"Prediction error: {e}")

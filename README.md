@@ -44,14 +44,14 @@ The model is served via a **production-grade FastAPI** with a custom interactive
 
 Unlike generic churn models, this project incorporates:
 
-| Feature | Description | Impact |
-|---------|-------------|--------|
-| **M-Pesa Usage** | Mobile money transaction patterns | Higher usage = 32% lower churn |
-| **Bonga Points** | Loyalty program engagement | Active users = 28% lower churn |
-| **Safaricom Home** | Home fiber adoption | Subscribers = 41% lower churn |
-| **County Demographics** | Geographic & urban/rural split | Rural + poor network = 2.3x higher risk |
-| **Network Quality** | Perceived service quality by region | Low quality = primary churn driver |
-| **Competitor Exposure** | Airtel/Telkom market pressure | High exposure = 1.8x higher churn |
+| Feature                 | Description                         | Impact                       |
+
+| **M-Pesa Usage**        | Mobile money transaction patterns   | Higher usage = 32% lower churn |
+| **Bonga Points**        | Loyalty program engagement          | Active users = 28% lower churn |
+| **Safaricom Home**      | Home fiber adoption                 | Subscribers = 41% lower churn |
+| **County Demographics** | Geographic & urban/rural split     | Rural + poor network = 2.3x higher risk |
+| **Network Quality**     | Perceived service quality by region | Low quality = primary churn driver |
+| **Competitor Exposure** | Airtel/Telkom market pressure       | High exposure = 1.8x higher churn |
 
 ---
 
@@ -113,7 +113,7 @@ curl -X POST "https://safaricom-churn-intelligence.onrender.com/predict" \
     "Poor network quality perception (4.0/10)"
   ],
   "recommended_actions": [
-    "🚨 Personal outreach within 24 hours",
+    " Personal outreach within 24 hours",
     "Offer 2x Bonga points for 3 months",
     "Propose annual contract with 2 months free",
     "Escalate to retention specialist team"
